@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================================
 # SenseLink Deck Installer
-# https://github.com/__GH_OWNER__/senselink
+# https://github.com/drewbaumann/senselink
 #
 # Forwards a DualSense controller from a Steam Deck (SteamOS) to a Linux
 # Sunshine host over USB/IP. FOSS-only path: kernel usbip, no VirtualHere.
 #
 # Usage (interactive):
-#   curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-deck.sh | bash
+#   curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-deck.sh | bash
 #
 # Usage (non-interactive — for automation / AI agents):
 #   curl -sL .../install-deck.sh | bash -s -- --yes
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 VERSION="0.1.0"
-GH_OWNER="__GH_OWNER__"
+GH_OWNER="drewbaumann"
 GH_REPO="senselink"
 RAW_BASE="https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/main"
 

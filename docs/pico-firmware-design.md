@@ -126,12 +126,36 @@ host — the kernel keeps a fresh one pending so the moment a HID report is
 ready, we have somewhere to put it. Our firmware just maintains a small
 queue (4–8 entries) of pending URBs and pops one for each BT report.
 
-### What we don't implement in v1
+### Phased scope
 
-- **Isochronous endpoints** — the DualSense exposes USB Audio Class
-  interfaces for the speaker and mic. We strip those from the descriptor
-  blob so the host doesn't try to use them. HD haptics still work because
-  they're driven by HID feature reports, not the audio EPs.
+DualSense features map to two transports on a wired controller:
+
+| Feature | Transport |
+|---------|-----------|
+| Sticks, buttons, gyro, touchpad | HID interrupt IN |
+| Big-motor rumble | HID output report |
+| Adaptive triggers | HID output report |
+| LED bar | HID output report |
+| **HD haptics** | **USB Audio Class (isochronous OUT) — speaker channel drives the haptic actuators** |
+| Microphone passthrough | USB Audio Class (isochronous IN) |
+
+**v1 (no isochronous):** ship HID interfaces only. Yields sticks, buttons,
+motion, basic rumble, *and adaptive triggers*. **No HD haptics, no mic.**
+The descriptor blob omits the audio interfaces so the kernel doesn't try
+to use them.
+
+**v2 (full):** add isochronous EP handling to the usbip server, advertise
+the audio interfaces, pipe audio frames between BT and the network with
+appropriate buffering. This brings HD haptics back. Mic passthrough is a
+free side-effect once isochronous works in both directions.
+
+Isochronous over usbip is the hairy part of the protocol — the
+`usbip_iso_packet_descriptor` array, per-frame error reporting, and the
+host's strict scheduling expectations all make this v2 work in earnest,
+not a stretch goal for v1.
+
+### Other v1 constraints
+
 - **Multi-client** — accept one TCP connection, refuse others.
 - **TLS** — usbip itself has no TLS; trust the network or run over
   Tailscale.
@@ -207,22 +231,27 @@ SSID/PSK at compile time (only useful for tinkering).
    `tailscale serve` / browsers can find it, and the host script can
    discover without hard-coding the IP. Optional but nice.
 
-## Implementation milestones (first three PRs)
+## Implementation milestones
 
-1. **PR 1 — Wi-Fi + skeleton usbip server.** Connects to the configured
-   SSID, listens on 3240, answers `OP_REQ_DEVLIST` with a hardcoded
-   "Hello DualSense" entry. Verify on the host with `usbip list -r
-   pico.local`. No real device, no URB handling yet.
+**PR 1 — Wi-Fi + skeleton usbip server.** Connects to the configured
+SSID, listens on 3240, answers `OP_REQ_DEVLIST` with a hardcoded
+"Hello DualSense" entry. Verify from the host with
+`usbip list -r pico.local`. No real device, no URB handling.
 
-2. **PR 2 — Read-only device.** Implement `OP_REQ_IMPORT` and the URB
-   pump for EP0 (descriptors) + EP1 (interrupt IN). Wire bridge.c so BT
-   input reports get pushed into pending IN URBs. Result: `usbip attach`
-   succeeds, the host sees a DualSense, sticks/buttons work. Rumble does
-   not yet.
+**PR 2 — Read-only device.** Implement `OP_REQ_IMPORT` and the URB pump
+for EP0 (descriptors) + EP1 (HID interrupt IN). Wire bridge.c so BT
+input reports get pushed into pending IN URBs. Result: `usbip attach`
+succeeds, the host sees a DualSense, sticks/buttons/motion/touchpad
+work. Rumble does not yet.
 
-3. **PR 3 — Output reports.** Handle EP2 interrupt OUT URBs and pipe the
-   payload back through BT. Now rumble, adaptive triggers, and the LED
-   bar all work. v1 done.
+**PR 3 — HID output reports.** Handle EP2 interrupt OUT URBs and pipe
+the payload back through BT. Now rumble, adaptive triggers, and the LED
+bar all work. **v1 ships here** — full HID feature set, no HD haptics.
+
+**PR 4 — Isochronous: USB Audio.** Add isochronous SUBMIT/RETURN
+handling with per-frame iso descriptors, expose the audio interfaces in
+the descriptor blob, buffer audio frames between BT and the network.
+**v2 ships here** — HD haptics + mic passthrough.
 
 ## Useful references
 

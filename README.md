@@ -49,7 +49,7 @@ That's the whole project.
 **1. Steam Deck** — open Konsole in Desktop Mode:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-deck.sh | bash
+curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-deck.sh | bash
 ```
 
 It will:
@@ -62,7 +62,7 @@ It will:
 **2. Linux host** — paste the command the Deck installer printed, or run:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-host.sh | bash -s -- --deck=YOUR-DECK-TS-HOSTNAME
+curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh | bash -s -- --deck=YOUR-DECK-TS-HOSTNAME
 ```
 
 On Bazzite / Silverblue, the first run **layers the `usbip` package via rpm-ostree and asks you to reboot**, then you re-run the same command and it finishes. On dnf / apt / pacman hosts it installs directly and continues.
@@ -75,19 +75,19 @@ Both installers accept `--yes` for non-interactive use. Run in this order:
 
 ```bash
 # On the Steam Deck:
-curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-deck.sh \
+curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-deck.sh \
   | bash -s -- --yes
 
 # Note the Deck hostname printed at the end (Tailscale hostname or LAN IP).
 
 # On the Linux host (first invocation — may stage rpm-ostree and exit):
-curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-host.sh \
+curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh \
   | bash -s -- --deck=DECK_HOSTNAME --yes
 
 # If the host installer says "REBOOT REQUIRED", reboot then re-run:
 systemctl reboot
 # (after reboot, same command finishes the install)
-curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-host.sh \
+curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh \
   | bash -s -- --deck=DECK_HOSTNAME --yes
 ```
 

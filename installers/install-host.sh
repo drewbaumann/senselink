@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================================
 # SenseLink Host Installer
-# https://github.com/__GH_OWNER__/senselink
+# https://github.com/drewbaumann/senselink
 #
 # Pulls a DualSense controller from a SteamOS Deck (running the SenseLink
 # server) into this Linux host over USB/IP. Designed for Bazzite/Fedora
 # Atomic but tolerates other Fedora/Ubuntu/Arch hosts.
 #
 # Usage (interactive):
-#   curl -sL https://raw.githubusercontent.com/__GH_OWNER__/senselink/main/installers/install-host.sh | bash
+#   curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh | bash
 #
 # Usage (non-interactive — AI agent / scripted):
 #   curl -sL .../install-host.sh | bash -s -- --deck=steamdeck --yes
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 VERSION="0.1.0"
-GH_OWNER="__GH_OWNER__"
+GH_OWNER="drewbaumann"
 GH_REPO="senselink"
 RAW_BASE="https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/main"
 
