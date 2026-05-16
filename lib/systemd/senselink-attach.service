@@ -1,0 +1,14 @@
+[Unit]
+Description=SenseLink USB/IP attach loop (pulls DualSense from Deck)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/sbin/modprobe vhci-hcd
+ExecStart=/etc/senselink/attach-loop.sh
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
