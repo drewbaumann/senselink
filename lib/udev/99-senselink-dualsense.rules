@@ -1,5 +1,0 @@
-# SenseLink — auto-bind DualSense to usbip on plug
-# DualSense standard (CFI-ZCT1)
-SUBSYSTEM=="usb", DEVTYPE=="usb_device", ACTION=="add", ATTR{idVendor}=="054c", ATTR{idProduct}=="0ce6", RUN+="/etc/senselink/on-plug.sh $kernel"
-# DualSense Edge (CFI-ZCP1)
-SUBSYSTEM=="usb", DEVTYPE=="usb_device", ACTION=="add", ATTR{idVendor}=="054c", ATTR{idProduct}=="0df2", RUN+="/etc/senselink/on-plug.sh $kernel"

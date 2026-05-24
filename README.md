@@ -2,177 +2,166 @@
 
 # SenseLink
 
-**Forward a DualSense from your Steam Deck to a Linux host over USB/IP.**
-All FOSS, kernel-native. No VirtualHere, no ViGEmBus, no DSX.
+**Forward a DualSense from a small Linux box to your Linux gaming PC over the network — natively, no proprietary software.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-SteamOS%20%E2%86%92%20Linux%20(Bazzite%2FFedora)-lightgrey?style=for-the-badge&logo=linux)]()
+Adaptive triggers, HD haptics, gyro, and touchpad all work, because the gaming
+PC sees a *real* USB DualSense via the kernel's `hid-playstation` driver.
 
 </div>
 
 ---
 
-SenseLink is a two-piece installer that puts a kernel-native DualSense in front of your Linux Sunshine host, streamed from a Steam Deck over USB/IP. Adaptive triggers, HD haptics, gyro, and touchpad all work because the Linux kernel's `hid-playstation` driver exposes them directly — no virtual gamepad emulation in the loop.
+## What this is
+
+You plug a DualSense into a cheap always-on Linux box (a Raspberry Pi works great).
+That box shares the controller over the network with your gaming PC using the
+Linux kernel's built-in **USB/IP**. Your PC sees a real, wired DualSense — so
+every feature works, and it behaves identically in native games and in
+game-streaming setups.
 
 ```
-DualSense --> Steam Deck --[ usbip over LAN / Tailscale ]--> Linux Host
-                                                                 |
-                                                            hid-playstation
-                                                                 v
-                                                         Real DualSense
-                                                         input device
-                                                         (games see it)
+DualSense ──USB──> Pi (exporter) ──usbip over Tailscale──> Gaming PC (host) ──> games
+                   usbipd                                   usbip attach + hid-playstation
 ```
 
-## Why this exists
+This is the **all-Linux, all-FOSS** counterpart to [PhantomSense](https://github.com/AarveeGill/Phantom-Sense)
+(which targets Windows hosts with VirtualHere + ViGEmBus + DSX). On Linux you
+need none of that — the kernel already speaks USB/IP and already has a native
+DualSense driver.
 
-[PhantomSense](https://github.com/AarveeGill/Phantom-Sense) solves the same problem for **Windows** hosts using VirtualHere + ViGEmBus + HidHide + DSX. Each of those tools exists to paper over a Windows limitation. Linux already has every piece in-kernel: the kernel speaks USB/IP, the kernel has a native DualSense driver, and games using SDL3's gamepad API see the full feature set directly.
+## Why not just plug the controller into the gaming PC?
 
-So instead of porting four Windows tools, SenseLink wires up two things:
+Because the point is to use it **away** from the gaming PC — on the couch, at the
+TV — while streaming the game with Sunshine/Moonlight. Normally Moonlight
+translates your controller into a generic Xbox pad and strips adaptive
+triggers, haptics, gyro, and touchpad. SenseLink forwards the *raw USB device*
+straight to the gaming PC instead, so the game gets a native DualSense while
+Moonlight only carries video. (See [Game streaming](#game-streaming-sunshine--moonlight).)
 
-1. **Deck**: kernel's `usbipd` daemon + a udev rule that auto-binds the DualSense on plug
-2. **Host**: kernel's `usbip` attach in a small retry loop as a systemd service
+## Requirements
 
-That's the whole project.
+| Role | What | Notes |
+|------|------|-------|
+| **Exporter** | Any always-on Linux box | Raspberry Pi 3/4/5, an old laptop, etc. Needs a USB port + network. |
+| **Host** | Your Linux gaming PC | Bazzite / Fedora / Arch / Ubuntu — anything with `usbip` + `vhci-hcd`. |
+| **Both** | [Tailscale](https://tailscale.com) (recommended) | Free. Makes it work across rooms / networks and sidesteps router quirks (see [Troubleshooting](#troubleshooting)). |
+| Controller | DualSense or DualSense Edge | `054c:0ce6` / `054c:0df2`. |
 
-## What you need
+## Setup
 
-| | Hardware | Software |
-|---|---|---|
-| **Deck** | Steam Deck (LCD or OLED) | SteamOS 3.x |
-| **Host** | Any x86_64 Linux box | Bazzite / Fedora Atomic / Fedora / Ubuntu / Arch |
-| **Both** | Same LAN or [Tailscale](https://tailscale.com) | — |
-| **Optional** | DualSense Edge | (works identically to standard) |
-
-## Install — for humans
-
-**1. Steam Deck** — open Konsole in Desktop Mode:
+### 1. Exporter (the box the controller plugs into)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/drewbaumann/senselink/main/install-exporter.sh | sudo bash
 ```
 
-It will:
-- Layer the `linux-tools` package via pacman (toggling `steamos-readonly`)
-- Stash the `usbip` / `usbipd` binaries in `~/senselink/bin/` so they survive SteamOS updates
-- Install a systemd service + udev rule that auto-binds any plugged-in DualSense
-- Print your Deck's Tailscale hostname so you can paste it into step 2
-- Drop a restore script for after SteamOS updates
-
-**2. Linux host** — paste the command the Deck installer printed, or run:
+Then put it on Tailscale and note its name:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh | bash -s -- --deck=YOUR-DECK-TS-HOSTNAME
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale status      # note the 'Self' name, e.g. livingroom-pi
 ```
 
-On Bazzite / Silverblue, the first run **layers the `usbip` package via rpm-ostree and asks you to reboot**, then you re-run the same command and it finishes. On dnf / apt / pacman hosts it installs directly and continues.
+Plug in the DualSense — it auto-binds.
 
-**3. Plug DualSense into the Deck.** It appears on your host as a native input device within a few seconds. Launch a game; adaptive triggers and haptics work for any title that uses SDL3's gamepad API (most Proton + native Linux titles).
-
-## Install — for AI agents / scripts
-
-Both installers accept `--yes` for non-interactive use. Run in this order:
+### 2. Host (your gaming PC)
 
 ```bash
-# On the Steam Deck:
-curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-deck.sh \
-  | bash -s -- --yes
-
-# Note the Deck hostname printed at the end (Tailscale hostname or LAN IP).
-
-# On the Linux host (first invocation — may stage rpm-ostree and exit):
-curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh \
-  | bash -s -- --deck=DECK_HOSTNAME --yes
-
-# If the host installer says "REBOOT REQUIRED", reboot then re-run:
-systemctl reboot
-# (after reboot, same command finishes the install)
-curl -sL https://raw.githubusercontent.com/drewbaumann/senselink/main/installers/install-host.sh \
-  | bash -s -- --deck=DECK_HOSTNAME --yes
+curl -fsSL https://raw.githubusercontent.com/drewbaumann/senselink/main/install-host.sh \
+  | sudo bash -s -- --exporter=livingroom-pi
 ```
 
-**Required inputs the agent must supply:**
+Replace `livingroom-pi` with your exporter's Tailscale name (or its IP).
 
-| Input | Where to obtain | Example |
-|---|---|---|
-| `DECK_HOSTNAME` | Run `tailscale status` on the Deck and read the `Self.HostName` field, OR use the Deck's LAN IP if not on Tailscale. The Deck installer prints both at the end of its run. | `steamdeck` or `192.168.1.42` |
+> **Bazzite / Silverblue (rpm-ostree):** the first run layers `usbip` and asks
+> you to **reboot**, then you re-run the same command. That's expected on atomic
+> distros.
 
-**Exit codes:**
-- `0` — success (including the "reboot required" exit on the host installer's first run on atomic systems)
-- non-zero — fatal error; stderr explains
+Make sure the host is on Tailscale too (`sudo tailscale up`). That's it — the
+controller auto-attaches on boot and re-attaches if it ever drops.
 
-**Idempotency:** both installers detect existing state (`usbip already on PATH`, `service already enabled`, `rpm-ostree layer already staged`) and skip those steps. Safe to re-run.
+### Verify
 
-**Verification commands after install:**
+- **System Settings → Game Controller** (KDE) shows the DualSense and lets you test buttons/sticks/gyro.
+- or open **gamepad-tester.com** in a browser and press buttons.
+- or `usbip port` (host) shows the attached remote device.
 
-```bash
-# Deck:
-systemctl is-active senselink-server     # → active
-sudo usbip list -l                       # should show plugged-in USB devices, DualSense marked "bind"
+## Game streaming (Sunshine / Moonlight)
 
-# Host:
-systemctl is-active senselink-attach     # → active
-usbip list -r DECK_HOSTNAME              # should list the DualSense
-sudo usbip port                          # after a DualSense is plugged in on the Deck:
-                                         #   shows a "Port in Use" entry pointing at the Deck
-ls /dev/input/by-id/ | grep -i playstation   # native DualSense input nodes appear
+This is the intended use case, and it's better than Moonlight's built-in
+controller forwarding:
+
+```
+Video/audio:  Gaming PC (Sunshine) ──Moonlight──> client at the TV ──> screen
+Controller:   DualSense → exporter → usbip/Tailscale → Gaming PC (game reads it directly)
 ```
 
-## Tailscale and away-from-home use
+The game runs on the gaming PC and sees the DualSense as a **local, native**
+controller — full gyro/touchpad/triggers/haptics. Moonlight only carries the
+picture, so its controller-translation (which strips those features) is never
+in the path. The two paths are independent, so controller latency is just the
+usbip/Tailscale hop (single-digit ms on a direct connection), separate from
+video latency.
 
-Both sides use the Deck's hostname (via Tailscale MagicDNS), so the same install works at home and remote:
+**Important:** in the **Moonlight client** at the TV, turn **off** its gamepad
+input. Otherwise, if that client has its own controller, Sunshine spins up a
+second (virtual Xbox) pad on the gaming PC and you get double input.
 
-- At home → Tailscale gives a direct LAN-class connection (~single-digit ms RTT)
-- Away → Tailscale tries direct peer-to-peer first; falls back to DERP relay
-- Check with `tailscale status` on either machine — look for `direct` vs `relay` next to the other peer
+## How it works
 
-**Honest caveat**: when relayed, RTT can add 30–100 ms depending on geography. That's on top of Moonlight's video latency and won't feel great in twitchy shooters. Single-player / slower games are fine.
+- **Exporter** runs `usbipd` (systemd service) and a udev rule that, on plug,
+  disables USB autosuspend for the controller and `usbip bind`s it so it's
+  exportable.
+- **Host** runs a tiny systemd service that finds the controller the exporter
+  is sharing (matched by USB vendor/product), `usbip attach`es it over the
+  network, and re-attaches automatically if the link drops. A udev rule grants
+  your desktop user access to the controller's input/hidraw nodes.
+- The kernel's `hid-playstation` driver does the rest — the controller appears
+  exactly as if it were plugged into the gaming PC directly.
 
-## After a SteamOS update
+## Troubleshooting
 
-SteamOS updates can wipe `/etc/systemd/system/` and `/usr/bin/`. Everything you need to recover is stashed in `~/senselink/`. Re-run:
+Lessons learned the hard way:
 
-```bash
-~/senselink/restore.sh
-```
-
-The Deck installer prints this reminder at the end.
-
-## Status / uninstall
-
-```bash
-# Deck or Host:
-install-deck.sh --status        # or: install-host.sh --status
-install-deck.sh --uninstall     # or: install-host.sh --uninstall
-```
-
-(Run via the same `curl ... | bash -s -- --status` form if you don't have the script saved locally.)
-
-## How it differs from PhantomSense
-
-| | PhantomSense | SenseLink |
-|---|---|---|
-| Host OS | Windows | Linux |
-| USB/IP transport | VirtualHere (proprietary, free tier = 1 device) | Linux kernel `usbip` (FOSS, no limits) |
-| Virtual pad driver | ViGEmBus | Not needed — native DualSense |
-| HID hide layer | HidHide | Not needed |
-| Trigger / haptic engine | DSX (paid Steam app) | SDL3 gamepad API (built into Proton) |
-| Per-game trigger profiles | Yes (DSX) | No GUI yet; games drive triggers themselves |
+- **Controller connects but drops after ~10s / games can't reach it, even though
+  `ping` works.** Many consumer mesh routers (Eero, etc.) allow pings and
+  multicast between Wi-Fi clients but quietly break *sustained* client-to-client
+  TCP. **Fix: use Tailscale.** Point `--exporter` at the exporter's Tailscale
+  name; the WireGuard tunnel rides right past the router's client isolation and
+  usually negotiates a direct, low-latency peer connection (`tailscale ping <name>`
+  shows `direct` vs `relay`).
+- **Controller worked, then detached on its own.** USB autosuspend on the
+  exporter resets idle devices, which breaks the USB/IP bind. The exporter
+  installer disables autosuspend for the controller (`power/control=on`); if you
+  rolled your own, do the same.
+- **KDE / SDL says "no game controllers found" even though it's attached.** The
+  attached device's nodes need a `uaccess` tag so your logged-in user can open
+  them — the host installer adds this udev rule. Re-plug or re-attach after
+  installing.
+- **Raspberry Pi 3 B+ won't join your 5 GHz Wi-Fi.** It can't use 5 GHz **DFS**
+  channels (52–144). Put it on 2.4 GHz, or on 5 GHz non-DFS channels
+  (36/40/44/48/149/153/157/161/165), or wire it.
+- **VirtualHere times out claiming the DualSense.** VirtualHere claims each USB
+  interface separately, and the DualSense's audio interfaces make that slow
+  enough to time out. Kernel `usbip` binds the whole composite device at once
+  and handles it cleanly — which is why this project uses usbip.
+- **A second HID interface fails to probe in `dmesg`** (`Invalid byte count… pairing info`).
+  Harmless — the main gamepad interface registers fine.
 
 ## Repo layout
 
 ```
-.
-├── installers/
-│   ├── install-deck.sh     # run on Steam Deck
-│   └── install-host.sh     # run on Linux host
-├── lib/
-│   ├── systemd/            # service unit templates
-│   ├── udev/               # 99-senselink-dualsense.rules
-│   └── scripts/            # on-plug, attach-loop, restore (templated *.tmpl)
-├── LICENSE
-└── README.md
+install-exporter.sh   # run on the controller box (Pi)
+install-host.sh       # run on the gaming PC
+docs/                 # design notes (incl. a parked Pico-firmware experiment)
 ```
+
+## Credits
+
+Inspired by [PhantomSense](https://github.com/AarveeGill/Phantom-Sense) (the
+Windows-host equivalent). Built on Linux's kernel USB/IP, `hid-playstation`,
+and [Tailscale](https://tailscale.com).
 
 ## License
 
